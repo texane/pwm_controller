@@ -268,6 +268,7 @@ static uint8_t* uint8_to_string(uint8_t x)
   return buf;
 }
 
+__attribute__((unused))
 static uint8_t* uint16_to_string(uint16_t x)
 {
   static uint8_t buf[4];
@@ -516,25 +517,26 @@ static void ticks_to_ms_string(uint8_t ticks, uint8_t* buf)
   uint32_to_string(x, 1000, buf);
 }
 
-static void print_params(uint16_t duty, uint16_t freq, uint16_t dead)
+static void print_params(uint32_t duty, uint32_t freq, uint32_t dead)
 {
   /* duty is in percent, from 1 to 50 */
-  /* freq is in Hz, in 0 to 400000 Khz */
-  /* dead is in microseconds */
+  /* freq is in Hz, in 10 to 400000 */
+  /* dead is in milliseconds */
 
-  uart_write(uint16_to_string(duty), 4);
+#if 0
+  uint8_t buf[8];
+
+  uart_write(uint32_to_string(duty), 8);
   uart_write_cstring(" ");
-  uart_write(uint16_to_string(freq), 4);
+  uart_write(uint32_to_string(freq), 8);
   uart_write_cstring(" ");
-  uart_write(uint16_to_string(dead), 4);
+  uart_write(uint32_to_string(dead), 8);
   uart_write_cstring("\r\n");
+#endif
 }
 
 
 /* pwm control */
-
-/* top value, defining the resolution */
-static uint16_t pwm_icr1 = 0xffff;
 
 static void pwm_setup(void)
 {
@@ -566,45 +568,25 @@ static void pwm_setup(void)
   TCCR1B |= (0 << WGM12) | (1 << WGM13);
 }
 
-static uint16_t pwm_freq_to_reg(uint16_t freq)
+static void pwm_set_params(uint32_t duty, uint32_t freq, uint32_t dead)
 {
-  return F_CPU / freq;
-}
-
-static void pwm_set_params(uint16_t duty, uint16_t freq, uint16_t dead)
-{
-  /* computation: */
-  /* if f is the frequency */
-  /* 1 / freq + (dead / 1000) = 1 / f */
-  /* 1000 / (1000 * freq) + freq * dead / (freq * 1000) = 1 / f */
-  /* (1000 + freq * dead) / (freq * 1000) = 1 / f */
-  /* (freq * 1000) / (1000 + freq * dead) = f */
-  /* thus: */
-  /* top = fcpu / f */
-  /* top = (fcpu * (1000 + freq * dead)) / (freq * 1000) */
-  /* top = (fcpu * 1000) / (freq * 1000) + fcpu * freq * dead / (freq * 1000) */
-  /* top = fcpu / freq + (fcpu * dead) / 1000 */
-
   /* duty: 1 to 50 percent */
   /* freq: 10 to 400000 hz */
   /* dead: 10 to 5000 ms */
+
+  uint32_t x;
 
   /* stop during setup */
   TCCR1B &= ~(1 << CS10);
 
   /* frequency. icr1 acts as top value. */
-  pwm_icr1 = F_CPU / freq + (F_CPU * dead) / 1000;
-  ICR1 = pwm_icr1;
+  ICR1 = F_CPU / (2 * freq);
 
-  /* convert duty */
-  duty = (pwm_icr1 * duty) / 100;
-
-  /* convert deadtime */
-  dead = (1 / (1 / freq) - (dead / 1000));
-
-  /* pwm duties */
-  OCR1A = duty - dead;
-  OCR1B = duty;
+  /* ocr1a, channel a duty */
+  /* ocr1b, channel b duty */
+  x = (duty * F_CPU) / (2 * freq * 100UL);
+  OCR1A = x;
+  OCR1B = x + dead * F_CPU / 1000UL;
 
   /* start with no prescaler */
   TCCR1B |= (1 << CS10);
@@ -621,12 +603,12 @@ int main(void)
   uint8_t mode = MODE_DUTY;
   uint8_t but;
   uint8_t has_changed = 1;
-  uint16_t duty = 1;
-  uint16_t freq = 1;
-  uint16_t dead = 10;
-  uint16_t* value = &duty;
-  uint16_t min = 0;
-  uint16_t max = 0xffff;
+  uint32_t duty = 1;
+  uint32_t freq = 10;
+  uint32_t dead = 10;
+  uint32_t* value = &duty;
+  uint32_t min = 1;
+  uint32_t max = 50;
 
 #if CONFIG_LCD
   /* lcd */
@@ -658,27 +640,21 @@ int main(void)
       switch (mode)
       {
       case MODE_DUTY:
-	/* 1 to 50 percents */
-	/* 1 percent steps */
 	min = 1;
 	max = 50;
 	value = &duty;
 	break ;
 
       case MODE_FREQ:
-	/* 10 to 400000 Hz */
-	/* 10 Hz steps */
-	min = 1;
-	max = 40000;
+	min = 10;
+	max = 400000;
 	value = &freq;
 	break ;
 
       case MODE_DEAD:
       default:
-	/* 10 to 5000 ms */
-	/* 1 ms steps */
 	min = 10;
-	max = 5000 - 10;
+	max = 5000;
 	value = &dead;
 	break ;
       }
