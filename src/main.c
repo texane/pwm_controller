@@ -518,20 +518,21 @@ static void ticks_to_ms_string(uint8_t ticks, uint8_t* buf)
 
 static void print_params(uint32_t duty, uint32_t freq, uint32_t dead)
 {
-  /* duty is in percent, from 1 to 50 */
-  /* freq is in Hz, in 10 to 400000 */
-  /* dead is in milliseconds */
-
   uint8_t buf[8];
 
-  uint32_to_string(duty, 10000, buf);
-  uart_write(buf, 5);
+  /* duty in percent */
+  uint32_to_string(duty, 100, buf);
+  uart_write(buf, 3);
   uart_write_cstring(" ");
-  uint32_to_string(freq, 10000, buf);
-  uart_write(buf, 5);
+
+  /* freq in hz */
+  uint32_to_string(freq, 100000, buf);
+  uart_write(buf, 6);
   uart_write_cstring(" ");
-  uint32_to_string(dead, 10000, buf);
-  uart_write(buf, 5);
+
+  /* dead in us */
+  uint32_to_string(dead, 100000, buf);
+  uart_write(buf, 6);
   uart_write_cstring("\r\n");
 }
 
@@ -569,9 +570,9 @@ static void pwm_setup(void)
 
 static void pwm_set_params(uint32_t duty, uint32_t freq, uint32_t dead)
 {
-  /* duty: 1 to 50 percent */
-  /* freq: 10 to 400000 hz */
-  /* dead: 10 to 5000 ms */
+  /* duty in percent */
+  /* freq in hz */
+  /* dead in us */
 
   uint32_t x;
 
@@ -585,7 +586,7 @@ static void pwm_set_params(uint32_t duty, uint32_t freq, uint32_t dead)
   /* ocr1b, channel b duty */
   x = (duty * F_CPU) / (2 * freq * 100UL);
   OCR1A = x;
-  OCR1B = x + dead * F_CPU / 1000UL;
+  OCR1B = x + dead * F_CPU / 1000000UL;
 
   /* start with no prescaler */
   TCCR1B |= (1 << CS10);
@@ -603,11 +604,12 @@ int main(void)
   uint8_t but;
   uint8_t has_changed = 1;
   uint32_t duty = 50;
-  uint32_t freq = 100;
-  uint32_t dead = 1;
+  uint32_t freq = 500;
+  uint32_t dead = 0;
   uint32_t* value = &duty;
-  uint32_t min = 1;
-  uint32_t max = 50;
+  uint32_t min = 0;
+  uint32_t max = 100;
+  uint32_t step = 5;
 
 #if CONFIG_LCD
   /* lcd */
@@ -641,21 +643,24 @@ int main(void)
       switch (mode)
       {
       case MODE_DUTY:
-	min = 1;
-	max = 50;
+	min = 0;
+	max = 100;
+	step = 5;
 	value = &duty;
 	break ;
 
       case MODE_FREQ:
-	min = 10;
+	min = 0;
 	max = 400000;
+	step = 100;
 	value = &freq;
 	break ;
 
       case MODE_DEAD:
       default:
-	min = 10;
-	max = 5000;
+	min = 0;
+	max = 500000;
+	step = 10;
 	value = &dead;
 	break ;
       }
@@ -667,18 +672,18 @@ int main(void)
 
     if (but_is_pressed(but, BUT_MINUS_MASK))
     {
-      if (*value > min)
+      if (*value >= (min + step))
       {
-	--*value;
+	*value -= step;
 	has_changed = 1;
       }
     }
 
     if (but_is_pressed(but, BUT_PLUS_MASK))
     {
-      if (*value < max)
+      if (*value <= (max - step))
       {
-	++*value;
+	*value += step;
 	has_changed = 1;
       }
     }
