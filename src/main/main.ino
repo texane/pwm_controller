@@ -430,7 +430,7 @@ static uint8_t but_is_pressed(uint8_t x, uint8_t m)
 
 static volatile uint8_t timer_ticks = 0;
 
-ISR(TIMER1_COMPA_vect)
+ISR(TIMER0_COMPA_vect)
 {
   /* update button state */
   but_update_states();
@@ -442,28 +442,27 @@ ISR(TIMER1_COMPA_vect)
 
 static void timer_enable(void)
 {
-  /* 16 bits timer1 is used */
+  /* 8 bits timer0 is used */
   /* interrupt at TIMER_FREQ hz */
-  /* fcpu / (64 * 2500) = 100 hz */
+  /* fcpu / (1024 * 156) = 100 hz */
 
   /* stop timer */
   TCCR0B = 0;
 
   /* CTC mode, overflow when OCR1A reached */
-  TCCR1A = 0;
-  OCR1A = 2500;
-  TCNT1 = 0;
-  TCCR1C = 0;
+  TCCR0A = 1 << 2;
+  OCR0A = 156;
+  TCNT0 = 0;
 
   /* interrupt on OCIE0A match */
-  TIMSK1 = 1 << 1;
+  TIMSK0 = 1 << 1;
 
   /* reset timer tick counter */
   timer_ticks = 0;
 
   /* start timer */
-  /* prescaler set to 64 */
-  TCCR1B = (1 << 3) | (3 << 0);
+  /* prescaler set to 1024 */
+  TCCR0B = (1 << 3) | (5 << 0);
 }
 
 __attribute__((unused))
@@ -523,16 +522,17 @@ static void print_params(uint32_t duty, uint32_t freq, uint32_t dead)
   /* freq is in Hz, in 10 to 400000 */
   /* dead is in milliseconds */
 
-#if 0
   uint8_t buf[8];
 
-  uart_write(uint32_to_string(duty), 8);
+  uint32_to_string(duty, 10000, buf);
+  uart_write(buf, 5);
   uart_write_cstring(" ");
-  uart_write(uint32_to_string(freq), 8);
+  uint32_to_string(freq, 10000, buf);
+  uart_write(buf, 5);
   uart_write_cstring(" ");
-  uart_write(uint32_to_string(dead), 8);
+  uint32_to_string(dead, 10000, buf);
+  uart_write(buf, 5);
   uart_write_cstring("\r\n");
-#endif
 }
 
 
@@ -542,7 +542,6 @@ static void pwm_setup(void)
 {
 #define PWM_CHANA_MASK (1 << 1)
 #define PWM_CHANB_MASK (1 << 2)
-#define PWM_PORT PORTB
 #define PWM_DDR DDRB
 
   /* outputs: OC1A / PORTB1, OC1B / PORTB2 */
@@ -552,7 +551,7 @@ static void pwm_setup(void)
   /* this allow the frequecy and duty to be defined. */
 
   /* stop the counter */
-  TCCR1B |= (1 << CS10);
+  TCCR1B = 0;
 
   /* set OC1A and OC1B as outputs */
   /* enable pins output drivers */
@@ -603,9 +602,9 @@ int main(void)
   uint8_t mode = MODE_DUTY;
   uint8_t but;
   uint8_t has_changed = 1;
-  uint32_t duty = 1;
-  uint32_t freq = 10;
-  uint32_t dead = 10;
+  uint32_t duty = 50;
+  uint32_t freq = 100;
+  uint32_t dead = 1;
   uint32_t* value = &duty;
   uint32_t min = 1;
   uint32_t max = 50;
@@ -619,6 +618,7 @@ int main(void)
 
 #if CONFIG_UART
   uart_setup();
+  uart_write_cstring("ok\r\n");
 #endif
 
   but_setup();
@@ -628,6 +628,8 @@ int main(void)
   sei();
 
   /* application logic */
+
+  goto on_changed;
 
   while (1)
   {
@@ -682,6 +684,7 @@ int main(void)
       }
     }
 
+  on_changed:
     if (has_changed)
     {
       /* convert to register values */
