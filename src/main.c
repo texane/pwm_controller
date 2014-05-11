@@ -666,8 +666,8 @@ int main(void)
       }
 
       uart_write_cstring("mode: ");
-      if (MODE_DUTY == 0) uart_write_cstring("duty");
-      else if (MODE_FREQ == 1) uart_write_cstring("frequency");
+      if (mode == MODE_DUTY) uart_write_cstring("duty");
+      else if (mode == MODE_FREQ) uart_write_cstring("frequency");
       else uart_write_cstring("deadtime");
       uart_write_cstring("\r\n");
     }

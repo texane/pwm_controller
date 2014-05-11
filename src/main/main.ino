@@ -659,15 +659,15 @@ int main(void)
       case MODE_DEAD:
       default:
 	min = 0;
-	max = 500000;
+	max = 5000000;
 	step = 10;
 	value = &dead;
 	break ;
       }
 
       uart_write_cstring("mode: ");
-      if (MODE_DUTY == 0) uart_write_cstring("duty");
-      else if (MODE_FREQ == 1) uart_write_cstring("frequency");
+      if (mode == MODE_DUTY) uart_write_cstring("duty");
+      else if (mode == MODE_FREQ) uart_write_cstring("frequency");
       else uart_write_cstring("deadtime");
       uart_write_cstring("\r\n");
     }
